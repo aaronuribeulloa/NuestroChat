@@ -40,8 +40,6 @@ const Sidebar = () => {
     } catch (error) { setErr(true); }
   };
 
-  const handleKey = (e) => { if (e.code === "Enter") handleSearch(); };
-
   // 3. SELECCIONAR USUARIO DEL BUSCADOR (Crear chat nuevo)
   const handleSelect = async () => {
     // Crear ID único combinado
@@ -113,18 +111,21 @@ const Sidebar = () => {
           </button>
         </div>
 
-        {/* --- BUSCADOR --- */}
-        <div className="relative group">
+        {/* --- BUSCADOR (CORREGIDO PARA MÓVIL) --- */}
+        {/* Usamos un FORM para que el teclado del celular reconozca la acción de "Ir" o "Buscar" */}
+        <form onSubmit={(e) => { e.preventDefault(); handleSearch(); }} className="relative group">
           <input
             type="text"
             placeholder="Buscar o iniciar nuevo chat"
             className="w-full bg-gray-100 text-gray-700 py-2.5 pl-10 pr-4 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500/50 focus:bg-white transition-all duration-200 text-sm font-medium placeholder-gray-400"
-            onKeyDown={handleKey}
             onChange={(e) => setUsername(e.target.value)}
             value={username}
           />
-          <Search size={18} className="absolute left-3.5 top-2.5 text-gray-400 group-focus-within:text-indigo-500 transition-colors" />
-        </div>
+          {/* El botón es type="submit" para que funcione al hacer click o enter */}
+          <button type="submit" className="absolute left-3.5 top-2.5 text-gray-400 group-focus-within:text-indigo-500 transition-colors bg-transparent border-none p-0 flex items-center justify-center">
+            <Search size={18} />
+          </button>
+        </form>
         {err && <span className="text-red-500 text-xs ml-2 mt-2 block">Usuario no encontrado</span>}
       </div>
 
@@ -146,7 +147,7 @@ const Sidebar = () => {
         <div className="flex flex-col">
           {chats && Object.entries(chats)?.sort((a, b) => b[1].date - a[1].date).map((chat) => {
 
-            // --- PROTECCIÓN ANTI-ERROR: Si el chat está roto, lo ignoramos ---
+            // --- PROTECCIÓN ANTI-ERROR ---
             if (!chat[1].userInfo) return null;
 
             return (
