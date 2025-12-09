@@ -17,7 +17,7 @@ const ChatWindow = () => {
       <div 
         className="hidden md:flex flex-1 flex-col items-center justify-center relative overflow-hidden"
         style={{
-            backgroundColor: "#f8fafc",
+            backgroundColor: "#202020",
             backgroundImage: "radial-gradient(#cbd5e1 1px, transparent 1px)",
             backgroundSize: "24px 24px"
         }}
