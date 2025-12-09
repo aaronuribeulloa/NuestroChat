@@ -57,8 +57,9 @@ const Sidebar = () => {
     }
   };
 
-  // 3. SELECCIONAR USUARIO
+  // 3. SELECCIONAR USUARIO DEL BUSCADOR (Crear chat nuevo)
   const handleSelect = async () => {
+    // Crear ID único combinado
     const combinedId = currentUser.uid > userFound.uid
       ? currentUser.uid + userFound.uid
       : userFound.uid + currentUser.uid;
@@ -66,26 +67,44 @@ const Sidebar = () => {
     try {
       const res = await getDoc(doc(db, "chats", combinedId));
 
+      // 1. Si no existe el historial de chat, lo creamos
       if (!res.exists()) {
         await setDoc(doc(db, "chats", combinedId), { messages: [] });
-
-        await updateDoc(doc(db, "userChats", currentUser.uid), {
-          [combinedId + ".userInfo"]: { uid: userFound.uid, displayName: userFound.displayName, photoURL: userFound.photoURL },
-          [combinedId + ".date"]: serverTimestamp(),
-        });
-
-        await updateDoc(doc(db, "userChats", userFound.uid), {
-          [combinedId + ".userInfo"]: { uid: currentUser.uid, displayName: currentUser.displayName, photoURL: currentUser.photoURL },
-          [combinedId + ".date"]: serverTimestamp(),
-        });
       }
+
+      // 2. ACTUALIZACIÓN BLINDADA DE LAS LISTAS DE CHAT (Para los dos usuarios)
+      // Usamos 'setDoc' con 'merge: true' para que si el documento no existe, lo cree automáticamente.
+      // Y lo hacemos SIEMPRE, para asegurar que el chat aparezca en la barra lateral de ambos.
+
+      // A. Para MÍ (Usuario actual)
+      await setDoc(doc(db, "userChats", currentUser.uid), {
+        [combinedId]: {
+          userInfo: {
+            uid: userFound.uid,
+            displayName: userFound.displayName,
+            photoURL: userFound.photoURL
+          },
+          date: serverTimestamp()
+        }
+      }, { merge: true });
+
+      // B. Para EL OTRO (El destinatario)
+      await setDoc(doc(db, "userChats", userFound.uid), {
+        [combinedId]: {
+          userInfo: {
+            uid: currentUser.uid,
+            displayName: currentUser.displayName,
+            photoURL: currentUser.photoURL
+          },
+          date: serverTimestamp()
+        }
+      }, { merge: true });
+
     } catch (err) {
-      await setDoc(doc(db, "userChats", currentUser.uid), {});
-      await setDoc(doc(db, "userChats", userFound.uid), {});
-      handleSelect();
-      return;
+      console.log("Error en handleSelect:", err);
     }
 
+    // Limpiamos y seleccionamos
     dispatch({ type: "CHANGE_USER", payload: userFound });
     setUserFound(null);
     setUsername("");
