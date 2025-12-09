@@ -1,12 +1,12 @@
 import { createContext, useContext, useEffect, useState } from "react";
-import { auth, db } from "../config/firebase"; // <--- Asegúrate de importar 'db'
-import { 
-  GoogleAuthProvider, 
-  signInWithPopup, 
-  signOut, 
-  onAuthStateChanged 
+import { auth, db } from "../config/firebase";
+import {
+  GoogleAuthProvider,
+  signInWithPopup,
+  signOut,
+  onAuthStateChanged
 } from "firebase/auth";
-import { doc, setDoc, getDoc, serverTimestamp } from "firebase/firestore"; // <--- Nuevos imports
+import { doc, setDoc, getDoc, serverTimestamp } from "firebase/firestore";
 
 const AuthContext = createContext();
 
@@ -23,24 +23,28 @@ export const AuthProvider = ({ children }) => {
     const result = await signInWithPopup(auth, provider);
     const user = result.user;
 
-    // --- NUEVO: Guardar usuario en Base de Datos ---
+    // Referencia al usuario en la BD
     const userRef = doc(db, "users", user.uid);
     const userSnap = await getDoc(userRef);
 
-    // Si el usuario no existe en la BD, lo creamos
+    // Guardamos/Actualizamos los datos del usuario
+    // IMPORTANTE: 'displayNameLower' nos servirá para la búsqueda insensible a mayúsculas
+    const userData = {
+      uid: user.uid,
+      displayName: user.displayName,
+      displayNameLower: user.displayName ? user.displayName.toLowerCase() : "", // <--- ESTO ES NUEVO
+      email: user.email,
+      photoURL: user.photoURL,
+      lastLogin: serverTimestamp(),
+    };
+
+    // Si no existe, creamos. Si existe, actualizamos (merge) para asegurar que tenga el campo lowercase
     if (!userSnap.exists()) {
-      await setDoc(userRef, {
-        uid: user.uid,
-        displayName: user.displayName,
-        email: user.email,
-        photoURL: user.photoURL,
-        createdAt: serverTimestamp(),
-        // Generamos keywords para búsqueda simple (minúsculas)
-        searchKeywords: [user.displayName.toLowerCase(), user.email.toLowerCase()] 
-      });
+      await setDoc(userRef, { ...userData, createdAt: serverTimestamp() });
+    } else {
+      await setDoc(userRef, userData, { merge: true });
     }
-    // -----------------------------------------------
-    
+
     return result;
   };
 
