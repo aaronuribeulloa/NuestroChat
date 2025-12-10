@@ -3,9 +3,11 @@ import { AuthProvider, useAuth } from "./context/AuthContext";
 import Login from "./pages/Login";
 import Home from "./pages/Home";
 import { ChatContextProvider } from "./context/ChatContext";
+import React from "react"; // Necesario para el tipo ReactNode
 
-// 1. Componente que protege las rutas (El "Portero")
-const PrivateRoute = ({ children }) => {
+// 1. DEFINIR EL TIPO PARA LOS PROPS
+// Le decimos a TS que este componente espera "children" que sean nodos de React
+const PrivateRoute = ({ children }: { children: React.ReactNode }) => {
   const { currentUser } = useAuth();
 
   // Si NO hay usuario, mándalo al Login ("/")
@@ -13,8 +15,8 @@ const PrivateRoute = ({ children }) => {
     return <Navigate to="/" />;
   }
 
-  // Si SÍ hay usuario, déjalo pasar (muestra el Chat)
-  return children;
+  // Si SÍ hay usuario, déjalo pasar
+  return <>{children}</>;
 };
 
 // 2. La App Principal

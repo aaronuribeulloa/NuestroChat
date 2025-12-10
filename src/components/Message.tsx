@@ -2,10 +2,26 @@ import { useEffect, useRef } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useChat } from "../context/ChatContext";
 
-const Message = ({ message }) => {
+// 1. DEFINICIÓN DEL TIPO DE DATO (INTERFACE)
+// Esto actúa como un contrato: "Todo mensaje debe cumplir estas reglas"
+export interface IMessage {
+  id: string;
+  text: string;
+  senderId: string;
+  date: any; // Usamos 'any' por ahora porque Firestore Timestamp es un objeto complejo
+  img?: string;   // El '?' significa opcional (puede ser undefined)
+  audio?: string; // El '?' significa opcional
+}
+
+// 2. APLICAMOS EL TIPO A LAS PROPS DEL COMPONENTE
+const Message = ({ message }: { message: IMessage }) => {
+  // Nota: Como AuthContext y ChatContext aún son JS, TS inferirá 'any' para ellos.
+  // Eso está bien por ahora.
   const { currentUser } = useAuth();
   const { data } = useChat();
-  const ref = useRef();
+
+  // 3. TIPADO DE LA REFERENCIA (Apunta a un elemento DIV HTML)
+  const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     ref.current?.scrollIntoView({ behavior: "smooth" });
@@ -13,7 +29,8 @@ const Message = ({ message }) => {
 
   const isOwner = message.senderId === currentUser.uid;
 
-  const formatTime = (seconds) => {
+  // 4. TIPADO DE PARÁMETROS DE FUNCIÓN
+  const formatTime = (seconds: number) => {
     if (!seconds) return "";
     const date = new Date(seconds * 1000);
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -45,7 +62,7 @@ const Message = ({ message }) => {
             <img src={message.img} alt="attached" className="rounded-xl mb-2 max-w-full border-2 border-white/20" />
           )}
 
-          {/* 2. SI ES AUDIO (Nuevo) */}
+          {/* 2. SI ES AUDIO */}
           {message.audio && (
             <audio controls className="w-60 h-8 mt-1 mb-1">
               <source src={message.audio} type="audio/webm" />

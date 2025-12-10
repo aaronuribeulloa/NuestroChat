@@ -6,22 +6,25 @@ import { doc, updateDoc, Timestamp, setDoc, serverTimestamp } from "firebase/fir
 import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { v4 as uuid } from "uuid";
 import { Image, Send, Smile, X, Mic, Square } from "lucide-react";
-import EmojiPicker from "emoji-picker-react";
+import EmojiPicker, { EmojiClickData } from "emoji-picker-react"; // Importamos el tipo
 
 const Input = () => {
-    const [text, setText] = useState("");
-    const [img, setImg] = useState(null);
-    const [openEmoji, setOpenEmoji] = useState(false);
+    const [text, setText] = useState<string>("");
+    const [img, setImg] = useState<File | null>(null);
+    const [openEmoji, setOpenEmoji] = useState<boolean>(false);
 
     // Estados para Audio
-    const [recording, setRecording] = useState(false);
-    const mediaRecorderRef = useRef(null);
-    const audioChunksRef = useRef([]);
+    const [recording, setRecording] = useState<boolean>(false);
+
+    // 1. TIPADO DE REFS (Para interactuar con APIs del navegador)
+    const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+    const audioChunksRef = useRef<Blob[]>([]);
 
     const { currentUser } = useAuth();
     const { data } = useChat();
 
-    const handleEmoji = (e) => {
+    // 2. TIPADO DEL EVENTO EMOJI
+    const handleEmoji = (e: EmojiClickData) => {
         setText((prev) => prev + e.emoji);
     };
 
@@ -42,9 +45,9 @@ const Input = () => {
 
             mediaRecorder.onstop = async () => {
                 const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-                await sendAudio(audioBlob); // Enviamos automáticamente al soltar
+                await sendAudio(audioBlob);
                 const tracks = stream.getTracks();
-                tracks.forEach(track => track.stop()); // Apagamos el micro
+                tracks.forEach(track => track.stop());
             };
 
             mediaRecorder.start();
@@ -61,7 +64,7 @@ const Input = () => {
         }
     };
 
-    const sendAudio = async (audioBlob) => {
+    const sendAudio = async (audioBlob: Blob) => {
         const audioId = uuid();
         const storageRef = ref(storage, `chatAudios/${audioId}`);
         const uploadTask = uploadBytesResumable(storageRef, audioBlob);
@@ -72,7 +75,6 @@ const Input = () => {
             (error) => console.log(error),
             async () => {
                 const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-                // Enviamos el mensaje con tipo 'audio'
                 await sendMessageToFirestore(null, null, downloadURL);
             }
         );
@@ -106,21 +108,25 @@ const Input = () => {
         }
     };
 
-    // Función universal para enviar (Texto, Img o Audio)
-    const sendMessageToFirestore = async (text, imgURL, audioURL) => {
-        await setDoc(doc(db, "chats", data.chatId, "messages", uuid()), {
-            id: uuid(),
+    // 3. TIPADO DE PARÁMETROS OPCIONALES (null | string)
+    const sendMessageToFirestore = async (text: string | null, imgURL: string | null, audioURL: string | null) => {
+        const messageId = uuid();
+
+        // Guardar en subcolección messages
+        await setDoc(doc(db, "chats", data.chatId, "messages", messageId), {
+            id: messageId,
             text: text || "",
             senderId: currentUser.uid,
             date: Timestamp.now(),
             img: imgURL || null,
-            audio: audioURL || null, // Guardamos la URL del audio
+            audio: audioURL || null,
         });
 
         let lastMsgText = "📷 Foto";
         if (text) lastMsgText = text;
         if (audioURL) lastMsgText = "🎤 Nota de voz";
 
+        // Actualizar UserChats
         await updateDoc(doc(db, "userChats", currentUser.uid), {
             [data.chatId + ".lastMessage"]: { text: lastMsgText },
             [data.chatId + ".date"]: serverTimestamp(),
@@ -132,10 +138,17 @@ const Input = () => {
         });
     };
 
-    const handleKey = (e) => {
+    // 4. TIPADO DE EVENTOS DE TECLADO Y INPUT
+    const handleKey = (e: React.KeyboardEvent<HTMLInputElement>) => {
         if (e.code === "Enter" && !e.shiftKey) {
             e.preventDefault();
             handleSend();
+        }
+    };
+
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files && e.target.files[0]) {
+            setImg(e.target.files[0]);
         }
     };
 
@@ -161,7 +174,7 @@ const Input = () => {
                     type="file"
                     style={{ display: "none" }}
                     id="file"
-                    onChange={(e) => setImg(e.target.files[0])}
+                    onChange={handleFileChange} // Usamos la función tipada
                 />
                 <label htmlFor="file" className="cursor-pointer text-gray-400 hover:text-indigo-500 transition-colors">
                     <Image size={22} />
@@ -173,7 +186,7 @@ const Input = () => {
                     onChange={(e) => setText(e.target.value)}
                     onKeyDown={handleKey}
                     value={text}
-                    disabled={recording} // Bloqueamos texto si está grabando
+                    disabled={recording}
                     onClick={() => setOpenEmoji(false)}
                     className={`w-full bg-transparent border-none outline-none text-gray-700 placeholder-gray-400 font-medium ml-2 ${recording ? "animate-pulse text-red-500" : ""}`}
                 />
@@ -186,7 +199,6 @@ const Input = () => {
                 )}
             </div>
 
-            {/* BOTÓN DINÁMICO: Enviar o Grabar */}
             {text || img ? (
                 <button
                     onClick={handleSend}
@@ -196,7 +208,6 @@ const Input = () => {
                 </button>
             ) : (
                 <button
-                    // Si está grabando ejecuta stop, si no, start
                     onClick={recording ? stopRecording : startRecording}
                     className={`ml-3 p-3 rounded-full transition-all duration-200 active:scale-95 flex items-center justify-center shadow-lg ${recording ? "bg-red-500 hover:bg-red-600 animate-pulse" : "bg-indigo-600 hover:bg-indigo-700"}`}
                 >
