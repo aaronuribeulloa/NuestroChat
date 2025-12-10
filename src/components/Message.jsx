@@ -20,7 +20,7 @@ const Message = ({ message }) => {
   };
 
   return (
-    <div 
+    <div
       ref={ref}
       className={`flex gap-3 mb-6 ${isOwner ? "flex-row-reverse" : ""}`}
     >
@@ -32,23 +32,33 @@ const Message = ({ message }) => {
         />
       </div>
 
-      <div className={`max-w-[70%] flex flex-col gap-1 ${isOwner ? "items-end" : "items-start"}`}>
-        <div 
-            className={`px-5 py-3 shadow-md relative text-sm font-medium leading-relaxed
-            ${isOwner 
-                ? "bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-2xl rounded-tr-sm" 
-                : "bg-white text-gray-700 rounded-2xl rounded-tl-sm border border-gray-100"
+      <div className={`max-w-[75%] flex flex-col gap-1 ${isOwner ? "items-end" : "items-start"}`}>
+        <div
+          className={`px-4 py-3 shadow-md relative text-sm font-medium leading-relaxed overflow-hidden
+            ${isOwner
+              ? "bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-2xl rounded-tr-sm"
+              : "bg-white text-gray-700 rounded-2xl rounded-tl-sm border border-gray-100"
             }`}
         >
-            {message.img && (
-                <img src={message.img} alt="attached" className="rounded-xl mb-3 max-w-full border-2 border-white/20"/>
-            )}
-            {message.text && <p>{message.text}</p>}
+          {/* 1. SI ES IMAGEN */}
+          {message.img && (
+            <img src={message.img} alt="attached" className="rounded-xl mb-2 max-w-full border-2 border-white/20" />
+          )}
+
+          {/* 2. SI ES AUDIO (Nuevo) */}
+          {message.audio && (
+            <audio controls className="w-60 h-8 mt-1 mb-1">
+              <source src={message.audio} type="audio/webm" />
+              Tu navegador no soporta audios.
+            </audio>
+          )}
+
+          {/* 3. SI ES TEXTO */}
+          {message.text && !message.audio && <p>{message.text}</p>}
         </div>
-        
-        {/* Hora pequeña y sutil */}
+
         <span className="text-[10px] text-gray-400 font-medium px-1">
-            {formatTime(message.date?.seconds)}
+          {formatTime(message.date?.seconds)}
         </span>
       </div>
     </div>
