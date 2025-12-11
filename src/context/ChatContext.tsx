@@ -1,19 +1,15 @@
 import { createContext, useContext, useReducer, ReactNode, Dispatch } from "react";
 import { useAuth } from "./AuthContext";
 
-// 1. DEFINIMOS LA FORMA DEL ESTADO
 interface ChatState {
   chatId: string;
-  user: any; // El objeto del otro usuario
+  user: any;
 }
 
-// 2. DEFINIMOS LAS ACCIONES PERMITIDAS
-// Esto evita errores de dedo al escribir el tipo de acción
 type ChatAction =
   | { type: "CHANGE_USER"; payload: any }
   | { type: "RESET" };
 
-// 3. DEFINIMOS QUÉ DEVUELVE EL CONTEXTO
 interface IChatContext {
   data: ChatState;
   dispatch: Dispatch<ChatAction>;
@@ -30,7 +26,6 @@ export const useChat = () => {
 export const ChatContextProvider = ({ children }: { children: ReactNode }) => {
   const { currentUser } = useAuth();
 
-  // Estado inicial
   const INITIAL_STATE: ChatState = {
     chatId: "null",
     user: {},
@@ -39,14 +34,22 @@ export const ChatContextProvider = ({ children }: { children: ReactNode }) => {
   const chatReducer = (state: ChatState, action: ChatAction): ChatState => {
     switch (action.type) {
       case "CHANGE_USER":
-        // Si el payload es null, reseteamos (útil para cerrar chat en móvil)
-        if (!action.payload) {
-          return INITIAL_STATE;
-        }
+        // 1. Si no hay payload, reseteamos
+        if (!action.payload) return INITIAL_STATE;
 
-        // Seguridad: Si por alguna razón no hay usuario logueado, no hacemos nada
+        // 2. Si no hay usuario logueado, no hacemos nada
         if (!currentUser) return state;
 
+        // --- CORRECCIÓN CRÍTICA AQUÍ ---
+        // A. Si es un GRUPO, el chatId es directamente el UID del grupo.
+        if (action.payload.isGroup) {
+          return {
+            user: action.payload,
+            chatId: action.payload.uid
+          };
+        }
+
+        // B. Si es una PERSONA (1vs1), usamos la fórmula combinada.
         return {
           user: action.payload,
           chatId:
