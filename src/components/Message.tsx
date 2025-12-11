@@ -2,34 +2,29 @@ import { useEffect, useRef } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useChat } from "../context/ChatContext";
 
-// 1. DEFINICIÓN DEL TIPO DE DATO (INTERFACE)
-// Esto actúa como un contrato: "Todo mensaje debe cumplir estas reglas"
+// 1. ACTUALIZAMOS LA INTERFAZ CON LOS NUEVOS DATOS OPCIONALES
 export interface IMessage {
   id: string;
   text: string;
   senderId: string;
-  date: any; // Usamos 'any' por ahora porque Firestore Timestamp es un objeto complejo
-  img?: string;   // El '?' significa opcional (puede ser undefined)
-  audio?: string; // El '?' significa opcional
+  senderDisplayName?: string; // Nuevo
+  senderPhotoURL?: string;    // Nuevo
+  date: any;
+  img?: string;
+  audio?: string;
 }
 
-// 2. APLICAMOS EL TIPO A LAS PROPS DEL COMPONENTE
 const Message = ({ message }: { message: IMessage }) => {
-  // Nota: Como AuthContext y ChatContext aún son JS, TS inferirá 'any' para ellos.
-  // Eso está bien por ahora.
   const { currentUser } = useAuth();
   const { data } = useChat();
-
-  // 3. TIPADO DE LA REFERENCIA (Apunta a un elemento DIV HTML)
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     ref.current?.scrollIntoView({ behavior: "smooth" });
   }, [message]);
 
-  const isOwner = message.senderId === currentUser.uid;
+  const isOwner = message.senderId === currentUser?.uid;
 
-  // 4. TIPADO DE PARÁMETROS DE FUNCIÓN
   const formatTime = (seconds: number) => {
     if (!seconds) return "";
     const date = new Date(seconds * 1000);
@@ -41,15 +36,28 @@ const Message = ({ message }: { message: IMessage }) => {
       ref={ref}
       className={`flex gap-3 mb-6 ${isOwner ? "flex-row-reverse" : ""}`}
     >
-      <div className="flex flex-col items-end">
+      <div className="flex flex-col items-end gap-1">
+        {/* FOTO DE PERFIL */}
         <img
-          src={isOwner ? currentUser.photoURL : data.user.photoURL}
+          src={
+            isOwner
+              ? currentUser?.photoURL || ""
+              : message.senderPhotoURL || data.user.photoURL // Si tiene foto propia úsala, si no, usa la del chat (fallback)
+          }
           alt=""
           className="w-8 h-8 rounded-full object-cover shadow-sm"
+          title={!isOwner ? message.senderDisplayName : "Tú"} // Tooltip al pasar el mouse
         />
       </div>
 
       <div className={`max-w-[75%] flex flex-col gap-1 ${isOwner ? "items-end" : "items-start"}`}>
+        {/* NOMBRE DEL REMITENTE (Solo en grupos y si no soy yo) */}
+        {!isOwner && data.user.isGroup && (
+          <span className="text-[10px] text-gray-400 font-bold ml-1">
+            {message.senderDisplayName || "Usuario"}
+          </span>
+        )}
+
         <div
           className={`px-4 py-3 shadow-md relative text-sm font-medium leading-relaxed overflow-hidden
             ${isOwner
@@ -57,12 +65,10 @@ const Message = ({ message }: { message: IMessage }) => {
               : "bg-white text-gray-700 rounded-2xl rounded-tl-sm border border-gray-100"
             }`}
         >
-          {/* 1. SI ES IMAGEN */}
           {message.img && (
             <img src={message.img} alt="attached" className="rounded-xl mb-2 max-w-full border-2 border-white/20" />
           )}
 
-          {/* 2. SI ES AUDIO */}
           {message.audio && (
             <audio controls className="w-60 h-8 mt-1 mb-1">
               <source src={message.audio} type="audio/webm" />
@@ -70,7 +76,6 @@ const Message = ({ message }: { message: IMessage }) => {
             </audio>
           )}
 
-          {/* 3. SI ES TEXTO */}
           {message.text && !message.audio && <p>{message.text}</p>}
         </div>
 

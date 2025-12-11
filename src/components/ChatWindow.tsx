@@ -72,8 +72,8 @@ const ChatWindow = () => {
           </div>
 
           <div className="flex flex-col">
-            <span className="font-bold text-gray-800 text-lg leading-tight">
-              {data.user?.displayName}
+            <span className="text-xs text-indigo-500 font-medium">
+              {data.user.isGroup ? "Grupo" : "En línea"}
             </span>
             <span className="text-xs text-indigo-500 font-medium">
               En línea
