@@ -6,7 +6,7 @@ import Input from "./Input";
 const ChatWindow = () => {
   const { data, dispatch } = useChat();
 
-  // Función para cerrar el chat (Volver a la lista en móvil)
+  // Función para volver atrás
   const closeChat = () => {
     dispatch({ type: "CHANGE_USER", payload: null });
   };
@@ -36,7 +36,6 @@ const ChatWindow = () => {
           </div>
         </div>
 
-        {/* Decoración de fondo */}
         <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500"></div>
       </div>
     );
@@ -52,11 +51,10 @@ const ChatWindow = () => {
         backgroundSize: "20px 20px"
       }}
     >
-      {/* 1. HEADER (Encabezado Flotante) */}
+      {/* 1. HEADER */}
       <div className="h-20 bg-white/80 backdrop-blur-md border-b border-gray-200/50 flex items-center justify-between px-6 shadow-sm z-20 sticky top-0">
         <div className="flex items-center gap-4">
 
-          {/* --- CORRECCIÓN AQUÍ: Agregado onClick={closeChat} --- */}
           <button
             onClick={closeChat}
             className="md:hidden text-gray-500 hover:text-gray-700 transition-colors"

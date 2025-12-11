@@ -1,42 +1,51 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, FormEvent } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useChat } from "../context/ChatContext";
 import { LogOut, Search, MessageSquarePlus, UserPlus } from "lucide-react";
 import { db } from "../config/firebase";
-import { collection, query, where, getDocs, setDoc, doc, updateDoc, serverTimestamp, getDoc, onSnapshot } from "firebase/firestore";
+import { collection, query, where, getDocs, setDoc, doc, updateDoc, serverTimestamp, getDoc, onSnapshot, DocumentData } from "firebase/firestore";
+
+// 1. DEFINIMOS LOS TIPOS PARA LA LISTA DE CHATS
+interface IChatUserInfo {
+  uid: string;
+  displayName: string;
+  photoURL: string;
+}
+
+interface IChatData {
+  userInfo: IChatUserInfo;
+  lastMessage?: { text: string };
+  date?: any;
+}
 
 const Sidebar = () => {
   const { currentUser, logout } = useAuth();
   const { dispatch } = useChat();
 
-  const [username, setUsername] = useState("");
-  const [userFound, setUserFound] = useState(null);
-  const [err, setErr] = useState(false);
-  const [chats, setChats] = useState([]);
+  const [username, setUsername] = useState<string>("");
+  const [userFound, setUserFound] = useState<DocumentData | null>(null);
+  const [err, setErr] = useState<boolean>(false);
+  const [chats, setChats] = useState<DocumentData>({}); // Objeto de chats
 
   // 1. ESCUCHAR CHATS EN TIEMPO REAL
   useEffect(() => {
+    if (!currentUser?.uid) return;
+
     const getChats = () => {
       const unsub = onSnapshot(doc(db, "userChats", currentUser.uid), (doc) => {
-        setChats(doc.data());
+        setChats(doc.data() as DocumentData);
       });
       return () => { unsub(); };
     };
     currentUser.uid && getChats();
-  }, [currentUser.uid]);
+  }, [currentUser?.uid]);
 
-  // 2. BUSCAR USUARIO (MEJORADO)
+  // 2. BUSCAR USUARIO
   const handleSearch = async () => {
     setErr(false);
     setUserFound(null);
-
-    // Convertimos lo que escribes a minúsculas
     const queryText = username.toLowerCase();
 
-    // TRUCO DE FIREBASE PARA "EMPIEZA POR...":
-    // Buscamos en 'displayNameLower' todo lo que sea >= que el texto
-    // Y menor que el texto + un carácter especial (uf8ff).
-    // Esto simula un "LIKE 'texto%'" de SQL.
     const q = query(
       collection(db, "users"),
       where("displayNameLower", ">=", queryText),
@@ -46,7 +55,6 @@ const Sidebar = () => {
     try {
       const querySnapshot = await getDocs(q);
       if (!querySnapshot.empty) {
-        // Encontramos al primer usuario que coincida
         setUserFound(querySnapshot.docs[0].data());
       } else {
         setErr(true);
@@ -57,9 +65,10 @@ const Sidebar = () => {
     }
   };
 
-  // 3. SELECCIONAR USUARIO DEL BUSCADOR (Crear chat nuevo)
+  // 3. SELECCIONAR USUARIO DEL BUSCADOR
   const handleSelect = async () => {
-    // Crear ID único combinado
+    if (!currentUser || !userFound) return;
+
     const combinedId = currentUser.uid > userFound.uid
       ? currentUser.uid + userFound.uid
       : userFound.uid + currentUser.uid;
@@ -67,16 +76,11 @@ const Sidebar = () => {
     try {
       const res = await getDoc(doc(db, "chats", combinedId));
 
-      // 1. Si no existe el historial de chat, lo creamos
       if (!res.exists()) {
         await setDoc(doc(db, "chats", combinedId), { messages: [] });
       }
 
-      // 2. ACTUALIZACIÓN BLINDADA DE LAS LISTAS DE CHAT (Para los dos usuarios)
-      // Usamos 'setDoc' con 'merge: true' para que si el documento no existe, lo cree automáticamente.
-      // Y lo hacemos SIEMPRE, para asegurar que el chat aparezca en la barra lateral de ambos.
-
-      // A. Para MÍ (Usuario actual)
+      // Actualizar UserChats para AMBOS (merge: true es la clave)
       await setDoc(doc(db, "userChats", currentUser.uid), {
         [combinedId]: {
           userInfo: {
@@ -88,7 +92,6 @@ const Sidebar = () => {
         }
       }, { merge: true });
 
-      // B. Para EL OTRO (El destinatario)
       await setDoc(doc(db, "userChats", userFound.uid), {
         [combinedId]: {
           userInfo: {
@@ -104,17 +107,17 @@ const Sidebar = () => {
       console.log("Error en handleSelect:", err);
     }
 
-    // Limpiamos y seleccionamos
     dispatch({ type: "CHANGE_USER", payload: userFound });
     setUserFound(null);
     setUsername("");
   };
 
-  const handleSelectChat = (u) => {
+  // 4. SELECCIONAR CHAT DE LA LISTA
+  const handleSelectChat = (u: IChatUserInfo) => {
     dispatch({ type: "CHANGE_USER", payload: u });
   };
 
-  const formatTime = (seconds) => {
+  const formatTime = (seconds: number) => {
     if (!seconds) return "";
     const date = new Date(seconds * 1000);
     if (date.toDateString() === new Date().toDateString()) {
@@ -123,6 +126,11 @@ const Sidebar = () => {
     return date.toLocaleDateString();
   };
 
+  const handleSubmit = (e: FormEvent) => {
+    e.preventDefault();
+    handleSearch();
+  }
+
   return (
     <div className="w-full md:w-[400px] h-full bg-white border-r border-gray-100 flex flex-col shadow-xl z-20 relative">
       {/* --- HEADER --- */}
@@ -130,18 +138,18 @@ const Sidebar = () => {
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
             <div className="relative group cursor-pointer">
-              <img src={currentUser?.photoURL} alt="Profile" className="w-11 h-11 rounded-full object-cover border-2 border-gray-100 transition-all" />
+              <img src={currentUser?.photoURL || ""} alt="Profile" className="w-11 h-11 rounded-full object-cover border-2 border-gray-100 transition-all" />
               <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-white"></div>
             </div>
             <h2 className="font-bold text-gray-800 text-lg tracking-tight">{currentUser?.displayName?.split(' ')[0]}</h2>
           </div>
-          <button onClick={logout} className="p-2 bg-gray-50 text-gray-400 hover:bg-red-50 hover:text-red-500 rounded-full transition-all duration-200">
+          <button onClick={() => logout()} className="p-2 bg-gray-50 text-gray-400 hover:bg-red-50 hover:text-red-500 rounded-full transition-all duration-200">
             <LogOut size={18} />
           </button>
         </div>
 
         {/* --- BUSCADOR --- */}
-        <form onSubmit={(e) => { e.preventDefault(); handleSearch(); }} className="relative group">
+        <form onSubmit={handleSubmit} className="relative group">
           <input
             type="text"
             placeholder="Buscar usuario..."
@@ -156,7 +164,7 @@ const Sidebar = () => {
         {err && <span className="text-red-500 text-xs ml-2 mt-2 block">Usuario no encontrado</span>}
       </div>
 
-      {/* --- LISTA --- */}
+      {/* --- LISTA DE CHATS --- */}
       <div className="flex-1 overflow-y-auto custom-scrollbar">
         {userFound && (
           <div className="mx-4 mt-4 flex items-center gap-3 p-3 bg-indigo-50 rounded-xl cursor-pointer border border-indigo-100" onClick={handleSelect}>
@@ -171,32 +179,38 @@ const Sidebar = () => {
 
         <div className="flex flex-col">
           {chats && Object.entries(chats)?.sort((a, b) => b[1].date - a[1].date).map((chat) => {
-            if (!chat[1].userInfo) return null;
+            // Convertimos el objeto genérico a nuestro tipo IChatData
+            const chatData = chat[1] as IChatData;
+
+            if (!chatData.userInfo) return null;
+
             return (
               <div
                 key={chat[0]}
                 className="flex items-center gap-3 p-4 hover:bg-gray-50 cursor-pointer transition-colors duration-200 border-b border-gray-50 relative group"
-                onClick={() => handleSelectChat(chat[1].userInfo)}
+                onClick={() => handleSelectChat(chatData.userInfo)}
               >
                 <div className="relative flex-shrink-0">
-                  <img src={chat[1].userInfo.photoURL} className="w-12 h-12 rounded-full object-cover" />
+                  <img src={chatData.userInfo.photoURL} className="w-12 h-12 rounded-full object-cover" />
                 </div>
+
                 <div className="flex-1 min-w-0 flex flex-col justify-center gap-0.5">
                   <div className="flex justify-between items-baseline">
                     <span className="font-semibold text-gray-900 text-[15px] truncate">
-                      {chat[1].userInfo.displayName}
+                      {chatData.userInfo.displayName}
                     </span>
                     <span className="text-[11px] text-gray-400 font-medium flex-shrink-0">
-                      {formatTime(chat[1].date?.seconds)}
+                      {formatTime(chatData.date?.seconds)}
                     </span>
                   </div>
                   <p className="text-[13px] text-gray-500 truncate group-hover:text-gray-700 transition-colors">
-                    {chat[1].lastMessage?.text}
+                    {chatData.lastMessage?.text}
                   </p>
                 </div>
               </div>
             );
           })}
+
           {(!chats || Object.keys(chats).length === 0) && !userFound && (
             <div className="flex flex-col items-center justify-center mt-20 text-center px-6 opacity-60">
               <MessageSquarePlus size={48} className="text-gray-300 mb-3" />

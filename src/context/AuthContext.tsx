@@ -1,22 +1,36 @@
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { auth, db } from "../config/firebase";
 import {
   GoogleAuthProvider,
   signInWithPopup,
   signOut,
-  onAuthStateChanged
+  onAuthStateChanged,
+  User,           // Tipo oficial de Usuario de Firebase
+  UserCredential  // Tipo del resultado del login
 } from "firebase/auth";
 import { doc, setDoc, getDoc, serverTimestamp } from "firebase/firestore";
 
-const AuthContext = createContext();
+// 1. DEFINIMOS QUÉ DATOS OFRECE ESTE CONTEXTO (LA INTERFAZ)
+interface IAuthContext {
+  currentUser: User | null;
+  loginWithGoogle: () => Promise<UserCredential>;
+  logout: () => Promise<void>;
+}
+
+// Creamos el contexto tipado
+const AuthContext = createContext<IAuthContext | null>(null);
 
 export const useAuth = () => {
-  return useContext(AuthContext);
+  const context = useContext(AuthContext);
+  if (!context) throw new Error("useAuth debe usarse dentro de un AuthProvider");
+  return context;
 };
 
-export const AuthProvider = ({ children }) => {
-  const [currentUser, setCurrentUser] = useState(null);
-  const [loading, setLoading] = useState(true);
+// 2. TIPAMOS LOS PROPS (children)
+export const AuthProvider = ({ children }: { children: ReactNode }) => {
+  // 3. TIPAMOS EL ESTADO
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
 
   const loginWithGoogle = async () => {
     const provider = new GoogleAuthProvider();
@@ -28,17 +42,16 @@ export const AuthProvider = ({ children }) => {
     const userSnap = await getDoc(userRef);
 
     // Guardamos/Actualizamos los datos del usuario
-    // IMPORTANTE: 'displayNameLower' nos servirá para la búsqueda insensible a mayúsculas
     const userData = {
       uid: user.uid,
       displayName: user.displayName,
-      displayNameLower: user.displayName ? user.displayName.toLowerCase() : "", // <--- ESTO ES NUEVO
+      displayNameLower: user.displayName ? user.displayName.toLowerCase() : "",
       email: user.email,
       photoURL: user.photoURL,
       lastLogin: serverTimestamp(),
     };
 
-    // Si no existe, creamos. Si existe, actualizamos (merge) para asegurar que tenga el campo lowercase
+    // Si no existe, creamos. Si existe, actualizamos (merge)
     if (!userSnap.exists()) {
       await setDoc(userRef, { ...userData, createdAt: serverTimestamp() });
     } else {
@@ -48,7 +61,7 @@ export const AuthProvider = ({ children }) => {
     return result;
   };
 
-  const logout = () => signOut(auth);
+  const logout = async () => signOut(auth);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -58,7 +71,8 @@ export const AuthProvider = ({ children }) => {
     return unsubscribe;
   }, []);
 
-  const value = {
+  // Objeto con el tipo IAuthContext
+  const value: IAuthContext = {
     currentUser,
     loginWithGoogle,
     logout
