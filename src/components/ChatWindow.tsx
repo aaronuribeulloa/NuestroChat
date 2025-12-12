@@ -1,17 +1,45 @@
 import { useChat } from "../context/ChatContext";
-import { MessageCircle, MoreVertical, Video, Phone, ArrowLeft } from "lucide-react";
+import { useAuth } from "../context/AuthContext";
+import { MessageCircle, MoreVertical, Video, Phone, ArrowLeft, LogOut } from "lucide-react"; // Importamos LogOut
 import Messages from "./Messages";
 import Input from "./Input";
+import { doc, updateDoc, deleteField } from "firebase/firestore";
+import { db } from "../config/firebase";
 
 const ChatWindow = () => {
   const { data, dispatch } = useChat();
+  const { currentUser } = useAuth();
 
-  // Función para volver atrás
+  // Función para volver atrás (Móvil)
   const closeChat = () => {
     dispatch({ type: "CHANGE_USER", payload: null });
   };
 
-  // ESTADO 1: PANTALLA DE BIENVENIDA (Sin chat seleccionado)
+  // --- NUEVA LÓGICA: SALIR DEL GRUPO O BORRAR CHAT ---
+  const handleLeaveChat = async () => {
+    if (!currentUser || !data.chatId) return;
+
+    const isGroup = data.user.isGroup;
+    const confirmMessage = isGroup
+      ? "¿Seguro que quieres salir de este grupo?"
+      : "¿Quieres eliminar este chat de tu lista?";
+
+    if (window.confirm(confirmMessage)) {
+      try {
+        // Usamos deleteField() para borrar SOLO esa clave del objeto userChats
+        await updateDoc(doc(db, "userChats", currentUser.uid), {
+          [data.chatId]: deleteField()
+        });
+
+        // Cerramos el chat visualmente
+        dispatch({ type: "RESET" });
+      } catch (err) {
+        console.error("Error al salir:", err);
+      }
+    }
+  };
+
+  // ESTADO 1: PANTALLA DE BIENVENIDA
   if (data.chatId === "null") {
     return (
       <div
@@ -35,7 +63,6 @@ const ChatWindow = () => {
             <span className="px-3 py-1 bg-purple-100 text-purple-600 rounded-full text-xs font-semibold">Rápido</span>
           </div>
         </div>
-
         <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500"></div>
       </div>
     );
@@ -68,28 +95,40 @@ const ChatWindow = () => {
               alt="User"
               className="w-11 h-11 rounded-full object-cover border-2 border-white shadow-sm"
             />
-            <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white rounded-full"></div>
+            {/* Indicador de estado solo si NO es grupo */}
+            {!data.user.isGroup && (
+              <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white rounded-full"></div>
+            )}
           </div>
 
           <div className="flex flex-col">
-            <span className="text-xs text-indigo-500 font-medium">
-              {data.user.isGroup ? "Grupo" : "En línea"}
+            <span className="font-bold text-gray-800 text-lg leading-tight">
+              {data.user?.displayName}
             </span>
             <span className="text-xs text-indigo-500 font-medium">
-              En línea
+              {data.user.isGroup ? "Grupo" : "En línea"}
             </span>
           </div>
         </div>
 
-        <div className="flex gap-4 text-gray-400">
-          <div className="p-2 hover:bg-gray-100 rounded-full cursor-pointer transition-colors hover:text-indigo-500">
-            <Video size={22} />
+        <div className="flex gap-2 text-gray-400">
+          {/* Botones de llamada (Visuales por ahora) */}
+          <div className="p-2 hover:bg-gray-100 rounded-full cursor-pointer transition-colors hover:text-indigo-500" title="Videollamada">
+            <Video size={20} />
           </div>
-          <div className="p-2 hover:bg-gray-100 rounded-full cursor-pointer transition-colors hover:text-indigo-500">
-            <Phone size={22} />
+          <div className="p-2 hover:bg-gray-100 rounded-full cursor-pointer transition-colors hover:text-indigo-500" title="Llamada">
+            <Phone size={20} />
           </div>
-          <div className="p-2 hover:bg-gray-100 rounded-full cursor-pointer transition-colors hover:text-gray-600">
-            <MoreVertical size={22} />
+
+          <div className="w-px h-6 bg-gray-200 mx-1 self-center"></div>
+
+          {/* BOTÓN DE SALIR DEL GRUPO / BORRAR CHAT */}
+          <div
+            onClick={handleLeaveChat}
+            className="p-2 hover:bg-red-50 rounded-full cursor-pointer transition-colors text-gray-400 hover:text-red-500"
+            title={data.user.isGroup ? "Salir del grupo" : "Borrar chat"}
+          >
+            <LogOut size={20} />
           </div>
         </div>
       </div>
