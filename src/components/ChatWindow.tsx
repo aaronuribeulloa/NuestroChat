@@ -1,6 +1,7 @@
 import { useChat } from "../context/ChatContext";
 import { useAuth } from "../context/AuthContext";
-import { MessageCircle, MoreVertical, Video, Phone, ArrowLeft, LogOut } from "lucide-react"; // Importamos LogOut
+import { useNavigate } from "react-router-dom";
+import { MessageCircle, MoreVertical, Video, Phone, ArrowLeft, LogOut } from "lucide-react";
 import Messages from "./Messages";
 import Input from "./Input";
 import { doc, updateDoc, deleteField } from "firebase/firestore";
@@ -9,13 +10,22 @@ import { db } from "../config/firebase";
 const ChatWindow = () => {
   const { data, dispatch } = useChat();
   const { currentUser } = useAuth();
+  const navigate = useNavigate();
 
   // Función para volver atrás (Móvil)
   const closeChat = () => {
     dispatch({ type: "CHANGE_USER", payload: null });
   };
 
-  // --- NUEVA LÓGICA: SALIR DEL GRUPO O BORRAR CHAT ---
+  // --- LÓGICA DE VIDEOLLAMADA ---
+  const handleVideoCall = () => {
+    // Si hay un chat activo, navegamos a la sala usando el ID del chat
+    if (data.chatId && data.chatId !== "null") {
+      navigate(`/room/${data.chatId}`);
+    }
+  };
+
+  // --- LÓGICA DE SALIR DEL GRUPO / BORRAR CHAT ---
   const handleLeaveChat = async () => {
     if (!currentUser || !data.chatId) return;
 
@@ -26,12 +36,9 @@ const ChatWindow = () => {
 
     if (window.confirm(confirmMessage)) {
       try {
-        // Usamos deleteField() para borrar SOLO esa clave del objeto userChats
         await updateDoc(doc(db, "userChats", currentUser.uid), {
           [data.chatId]: deleteField()
         });
-
-        // Cerramos el chat visualmente
         dispatch({ type: "RESET" });
       } catch (err) {
         console.error("Error al salir:", err);
@@ -78,7 +85,7 @@ const ChatWindow = () => {
         backgroundSize: "20px 20px"
       }}
     >
-      {/* 1. HEADER */}
+      {/* HEADER */}
       <div className="h-20 bg-white/80 backdrop-blur-md border-b border-gray-200/50 flex items-center justify-between px-6 shadow-sm z-20 sticky top-0">
         <div className="flex items-center gap-4">
 
@@ -95,7 +102,6 @@ const ChatWindow = () => {
               alt="User"
               className="w-11 h-11 rounded-full object-cover border-2 border-white shadow-sm"
             />
-            {/* Indicador de estado solo si NO es grupo */}
             {!data.user.isGroup && (
               <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white rounded-full"></div>
             )}
@@ -112,17 +118,22 @@ const ChatWindow = () => {
         </div>
 
         <div className="flex gap-2 text-gray-400">
-          {/* Botones de llamada (Visuales por ahora) */}
-          <div className="p-2 hover:bg-gray-100 rounded-full cursor-pointer transition-colors hover:text-indigo-500" title="Videollamada">
+          {/* BOTÓN DE VIDEOLLAMADA CONECTADO */}
+          <div
+            onClick={handleVideoCall} // <--- 3. EJECUTAMOS LA FUNCIÓN AQUÍ
+            className="p-2 hover:bg-gray-100 rounded-full cursor-pointer transition-colors hover:text-indigo-500"
+            title="Videollamada"
+          >
             <Video size={20} />
           </div>
+
+          {/* Botón de llamada simple (Visual por ahora, o podríamos usar la misma función si Zego lo soporta) */}
           <div className="p-2 hover:bg-gray-100 rounded-full cursor-pointer transition-colors hover:text-indigo-500" title="Llamada">
             <Phone size={20} />
           </div>
 
           <div className="w-px h-6 bg-gray-200 mx-1 self-center"></div>
 
-          {/* BOTÓN DE SALIR DEL GRUPO / BORRAR CHAT */}
           <div
             onClick={handleLeaveChat}
             className="p-2 hover:bg-red-50 rounded-full cursor-pointer transition-colors text-gray-400 hover:text-red-500"
@@ -133,14 +144,12 @@ const ChatWindow = () => {
         </div>
       </div>
 
-      {/* 2. ÁREA DE MENSAJES */}
       <div className="flex-1 overflow-hidden relative">
         <div className="h-full w-full pb-24">
           <Messages />
         </div>
       </div>
 
-      {/* 3. INPUT */}
       <Input />
     </div>
   );
