@@ -53,9 +53,11 @@ const Message = ({ message, setReplyTo }: Props) => {
           img: null,
           audio: null,
           isDeleted: true,
-          replyTo: null // Borramos también la cita si se elimina
+          replyTo: null, // Borramos también la cita si se elimina
         });
-      } catch (err) { console.error(err); }
+      } catch (err) {
+        console.error(err);
+      }
     }
   };
 
@@ -63,43 +65,59 @@ const Message = ({ message, setReplyTo }: Props) => {
   const handleReply = () => {
     const textPreview = message.text
       ? message.text
-      : (message.img ? "📷 Foto" : (message.audio ? "🎤 Audio" : "Mensaje"));
+      : message.img
+        ? "📷 Foto"
+        : message.audio
+          ? "🎤 Audio"
+          : "Mensaje";
 
     setReplyTo({
       id: message.id,
       text: textPreview,
-      senderDisplayName: message.senderDisplayName || "Usuario"
+      senderDisplayName: message.senderDisplayName || "Usuario",
     });
   };
 
   const formatTime = (seconds: number) => {
     if (!seconds) return "";
     const date = new Date(seconds * 1000);
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   };
 
   return (
     <div
       ref={ref}
-      className={`flex gap-3 mb-6 group relative ${isOwner ? "flex-row-reverse" : ""}`}
+      className={`flex gap-3 mb-6 group relative ${isOwner ? "flex-row-reverse" : ""
+        }`}
       onMouseEnter={() => setShowActions(true)}
       onMouseLeave={() => setShowActions(false)}
     >
       <div className="flex flex-col items-end gap-1">
         <img
-          src={isOwner ? currentUser?.photoURL || "" : message.senderPhotoURL || data.user.photoURL}
+          src={
+            isOwner
+              ? currentUser?.photoURL || ""
+              : message.senderPhotoURL || data.user.photoURL
+          }
           alt=""
           className="w-8 h-8 rounded-full object-cover shadow-sm"
         />
       </div>
 
-      <div className={`max-w-[75%] flex flex-col gap-1 ${isOwner ? "items-end" : "items-start"}`}>
+      <div
+        className={`max-w-[75%] flex flex-col gap-1 ${isOwner ? "items-end" : "items-start"
+          }`}
+      >
         {!isOwner && data.user.isGroup && (
-          <span className="text-[10px] text-gray-400 font-bold ml-1">{message.senderDisplayName}</span>
+          <span className="text-[10px] text-gray-400 font-bold ml-1">
+            {message.senderDisplayName}
+          </span>
         )}
 
-        <div className={`relative flex items-center gap-2 ${isOwner ? "flex-row-reverse" : ""}`}>
-
+        <div
+          className={`relative flex items-center gap-2 ${isOwner ? "flex-row-reverse" : ""
+            }`}
+        >
           {/* BOTONES DE ACCIÓN (Responder / Eliminar) */}
           {showActions && !message.isDeleted && (
             <div className="flex gap-1">
@@ -125,27 +143,48 @@ const Message = ({ message, setReplyTo }: Props) => {
           )}
 
           <div className={`px-4 py-3 shadow-md relative text-sm font-medium leading-relaxed overflow-hidden
-                ${message.isDeleted
-              ? "bg-gray-100 text-gray-400 italic border border-gray-200"
-              : isOwner
-                ? "bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-2xl rounded-tr-sm"
-                : "bg-white text-gray-700 rounded-2xl rounded-tl-sm border border-gray-100"
-            } ${message.isDeleted ? "rounded-2xl" : ""}`}>
-
+            ${message.isDeleted
+                ? "bg-gray-100 dark:bg-slate-800 text-gray-400 italic border border-gray-200 dark:border-slate-700"
+                : isOwner
+                  ? "bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-2xl rounded-tr-sm"
+                  : "bg-white dark:bg-slate-800 text-gray-700 dark:text-gray-200 rounded-2xl rounded-tl-sm border border-gray-100 dark:border-slate-700" // <--- CAMBIOS AQUÍ
+              }
+          `}>
             {/* 4. VISUALIZACIÓN DE LA CITA (Si existe) */}
             {message.replyTo && !message.isDeleted && (
-              <div className={`mb-2 p-2 rounded-lg text-xs border-l-4 ${isOwner ? "bg-black/10 border-white/50 text-white/90" : "bg-gray-100 border-indigo-500 text-gray-600"}`}>
-                <span className="font-bold block mb-0.5">{message.replyTo.senderDisplayName}</span>
-                <span className="line-clamp-1 italic opacity-80">{message.replyTo.text}</span>
+              <div
+                className={`mb-2 p-2 rounded-lg text-xs border-l-4 ${isOwner
+                  ? "bg-black/10 border-white/50 text-white/90"
+                  : "bg-gray-100 border-indigo-500 text-gray-600"
+                  }`}
+              >
+                <span className="font-bold block mb-0.5">
+                  {message.replyTo.senderDisplayName}
+                </span>
+                <span className="line-clamp-1 italic opacity-80">
+                  {message.replyTo.text}
+                </span>
               </div>
             )}
 
-            {message.img && <img src={message.img} alt="attached" className="rounded-xl mb-2 max-w-full border-2 border-white/20" />}
-            {message.audio && <audio controls className="w-60 h-8 mt-1 mb-1"><source src={message.audio} type="audio/webm" /></audio>}
+            {message.img && (
+              <img
+                src={message.img}
+                alt="attached"
+                className="rounded-xl mb-2 max-w-full border-2 border-white/20"
+              />
+            )}
+            {message.audio && (
+              <audio controls className="w-60 h-8 mt-1 mb-1">
+                <source src={message.audio} type="audio/webm" />
+              </audio>
+            )}
             {message.text && !message.audio && <p>{message.text}</p>}
           </div>
         </div>
-        <span className="text-[10px] text-gray-400 font-medium px-1">{formatTime(message.date?.seconds)}</span>
+        <span className="text-[10px] text-gray-400 font-medium px-1">
+          {formatTime(message.date?.seconds)}
+        </span>
       </div>
     </div>
   );
