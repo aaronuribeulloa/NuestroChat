@@ -5,19 +5,17 @@ import {
   signInWithPopup,
   signOut,
   onAuthStateChanged,
-  User,           // Tipo oficial de Usuario de Firebase
-  UserCredential  // Tipo del resultado del login
+  User,
+  UserCredential
 } from "firebase/auth";
-import { doc, setDoc, getDoc, serverTimestamp } from "firebase/firestore";
+import { doc, setDoc, getDoc, serverTimestamp, updateDoc } from "firebase/firestore";
 
-// 1. DEFINIMOS QUÉ DATOS OFRECE ESTE CONTEXTO (LA INTERFAZ)
 interface IAuthContext {
   currentUser: User | null;
   loginWithGoogle: () => Promise<UserCredential>;
   logout: () => Promise<void>;
 }
 
-// Creamos el contexto tipado
 const AuthContext = createContext<IAuthContext | null>(null);
 
 export const useAuth = () => {
@@ -26,9 +24,7 @@ export const useAuth = () => {
   return context;
 };
 
-// 2. TIPAMOS LOS PROPS (children)
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  // 3. TIPAMOS EL ESTADO
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
 
@@ -37,21 +33,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const result = await signInWithPopup(auth, provider);
     const user = result.user;
 
-    // Referencia al usuario en la BD
     const userRef = doc(db, "users", user.uid);
     const userSnap = await getDoc(userRef);
 
-    // Guardamos/Actualizamos los datos del usuario
     const userData = {
       uid: user.uid,
       displayName: user.displayName,
       displayNameLower: user.displayName ? user.displayName.toLowerCase() : "",
       email: user.email,
       photoURL: user.photoURL,
-      lastLogin: serverTimestamp(),
+      lastSeen: serverTimestamp(), // CAMBIADO: Usamos lastSeen en lugar de lastLogin para ser más claros
+      isOnline: true, // NUEVO: Estado explícito
     };
 
-    // Si no existe, creamos. Si existe, actualizamos (merge)
     if (!userSnap.exists()) {
       await setDoc(userRef, { ...userData, createdAt: serverTimestamp() });
     } else {
@@ -61,17 +55,62 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return result;
   };
 
-  const logout = async () => signOut(auth);
+  const logout = async () => {
+    // Antes de salir, marcamos como offline
+    if (currentUser) {
+      await updateDoc(doc(db, "users", currentUser.uid), {
+        isOnline: false,
+        lastSeen: serverTimestamp()
+      });
+    }
+    return signOut(auth);
+  };
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setCurrentUser(user);
       setLoading(false);
+
+      // Si el usuario entra, marcamos online
+      if (user) {
+        await updateDoc(doc(db, "users", user.uid), {
+          isOnline: true,
+          lastSeen: serverTimestamp()
+        });
+      }
     });
     return unsubscribe;
   }, []);
 
-  // Objeto con el tipo IAuthContext
+  // --- NUEVO: HEARTBEAT (Latido) ---
+  // Actualiza el estado "En línea" cada 2 minutos para confirmar que sigue ahí
+  useEffect(() => {
+    if (!currentUser) return;
+
+    const interval = setInterval(async () => {
+      await updateDoc(doc(db, "users", currentUser.uid), {
+        lastSeen: serverTimestamp(),
+        isOnline: true
+      });
+    }, 120000); // 2 minutos
+
+    // Manejar cuando cierra la pestaña
+    const handleTabClose = () => {
+      updateDoc(doc(db, "users", currentUser.uid), {
+        isOnline: false,
+        lastSeen: serverTimestamp()
+      });
+    };
+
+    window.addEventListener("beforeunload", handleTabClose);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("beforeunload", handleTabClose);
+    };
+  }, [currentUser]);
+
+
   const value: IAuthContext = {
     currentUser,
     loginWithGoogle,

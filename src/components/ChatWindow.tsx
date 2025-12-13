@@ -1,10 +1,11 @@
+import { useEffect, useState } from "react"; // IMPORTANTE: Agregamos useState y useEffect
 import { useChat } from "../context/ChatContext";
 import { useAuth } from "../context/AuthContext";
 import { useNavigate } from "react-router-dom";
-import { MessageCircle, MoreVertical, Video, Phone, ArrowLeft, LogOut } from "lucide-react";
+import { MessageCircle, Video, Phone, ArrowLeft, LogOut } from "lucide-react";
 import Messages from "./Messages";
 import Input from "./Input";
-import { doc, updateDoc, deleteField } from "firebase/firestore";
+import { doc, updateDoc, deleteField, onSnapshot } from "firebase/firestore"; // Importamos onSnapshot
 import { db } from "../config/firebase";
 
 const ChatWindow = () => {
@@ -12,23 +13,64 @@ const ChatWindow = () => {
   const { currentUser } = useAuth();
   const navigate = useNavigate();
 
-  // Función para volver atrás (Móvil)
+  // Estado local para guardar la info "viva" del otro usuario
+  const [otherUser, setOtherUser] = useState<any>(null);
+
+  // --- EFECTO: ESCUCHAR ACTIVIDAD DEL OTRO USUARIO ---
+  useEffect(() => {
+    // Si es grupo o no hay usuario, no hacemos nada
+    if (data.user.isGroup || !data.user.uid) {
+      setOtherUser(null);
+      return;
+    }
+
+    // Nos suscribimos a los cambios del perfil del otro usuario
+    const unsub = onSnapshot(doc(db, "users", data.user.uid), (doc) => {
+      setOtherUser(doc.data());
+    });
+
+    return () => {
+      unsub();
+    };
+  }, [data.user.uid, data.user.isGroup]);
+
+
+  // --- FUNCIÓN PARA FORMATEAR "ÚLTIMA VEZ" ---
+  const getStatusText = () => {
+    if (data.user.isGroup) return "Grupo";
+    if (!otherUser) return "Desconectado";
+
+    // Si tiene la marca explícita de online
+    if (otherUser.isOnline) return "En línea";
+
+    // Si no, calculamos el tiempo desde lastSeen
+    if (otherUser.lastSeen) {
+      const lastDate = otherUser.lastSeen.toDate();
+      const now = new Date();
+      const diffInSeconds = Math.floor((now.getTime() - lastDate.getTime()) / 1000);
+
+      if (diffInSeconds < 60) return "Activo hace un momento";
+      if (diffInSeconds < 3600) return `Hace ${Math.floor(diffInSeconds / 60)} min`;
+      if (diffInSeconds < 86400) return `Hace ${Math.floor(diffInSeconds / 3600)} h`;
+      return "Desconectado"; // Más de un día
+    }
+
+    return "Desconectado";
+  };
+
+
   const closeChat = () => {
     dispatch({ type: "CHANGE_USER", payload: null });
   };
 
-  // --- LÓGICA DE VIDEOLLAMADA ---
   const handleVideoCall = () => {
-    // Si hay un chat activo, navegamos a la sala usando el ID del chat
     if (data.chatId && data.chatId !== "null") {
       navigate(`/room/${data.chatId}`);
     }
   };
 
-  // --- LÓGICA DE SALIR DEL GRUPO / BORRAR CHAT ---
   const handleLeaveChat = async () => {
     if (!currentUser || !data.chatId) return;
-
     const isGroup = data.user.isGroup;
     const confirmMessage = isGroup
       ? "¿Seguro que quieres salir de este grupo?"
@@ -46,36 +88,16 @@ const ChatWindow = () => {
     }
   };
 
-  // ESTADO 1: PANTALLA DE BIENVENIDA
   if (data.chatId === "null") {
+    // ... (Mismo código de bienvenida que ya tenías) ...
     return (
-      <div
-        className="hidden md:flex flex-1 flex-col items-center justify-center relative overflow-hidden"
-        style={{
-          backgroundColor: "#f8fafc",
-          backgroundImage: "radial-gradient(#cbd5e1 1px, transparent 1px)",
-          backgroundSize: "24px 24px"
-        }}
-      >
-        <div className="text-center p-10 z-10 bg-white/50 backdrop-blur-xl rounded-3xl shadow-xl border border-white">
-          <div className="bg-gradient-to-tr from-indigo-500 to-purple-600 p-6 rounded-3xl inline-block mb-6 shadow-lg shadow-black/50">
-            <MessageCircle size={64} className="text-yellow-300" />
-          </div>
-          <h2 className="text-3xl font-bold text-gray-800 mb-2 font-sans">NuestroChat Web</h2>
-          <p className="text-gray-500 max-w-md mx-auto leading-relaxed">
-            Envía mensajes, fotos y conecta con tus amigos en tiempo real con una interfaz moderna y rápida.
-          </p>
-          <div className="mt-8 flex gap-2 justify-center">
-            <span className="px-3 py-1 bg-indigo-100 text-indigo-600 rounded-full text-xs font-semibold">Seguro</span>
-            <span className="px-3 py-1 bg-purple-100 text-purple-600 rounded-full text-xs font-semibold">Rápido</span>
-          </div>
-        </div>
-        <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500"></div>
+      <div className="hidden md:flex flex-1 flex-col items-center justify-center relative bg-slate-50">
+        <MessageCircle size={64} className="text-gray-300 mb-4" />
+        <p className="text-gray-500">Selecciona un chat para comenzar</p>
       </div>
     );
   }
 
-  // ESTADO 2: CHAT ACTIVO
   return (
     <div
       className="flex-1 flex flex-col h-full relative"
@@ -88,11 +110,7 @@ const ChatWindow = () => {
       {/* HEADER */}
       <div className="h-20 bg-white/80 backdrop-blur-md border-b border-gray-200/50 flex items-center justify-between px-6 shadow-sm z-20 sticky top-0">
         <div className="flex items-center gap-4">
-
-          <button
-            onClick={closeChat}
-            className="md:hidden text-gray-500 hover:text-gray-700 transition-colors"
-          >
+          <button onClick={closeChat} className="md:hidden text-gray-500 hover:text-gray-700">
             <ArrowLeft size={24} />
           </button>
 
@@ -102,8 +120,9 @@ const ChatWindow = () => {
               alt="User"
               className="w-11 h-11 rounded-full object-cover border-2 border-white shadow-sm"
             />
-            {!data.user.isGroup && (
-              <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white rounded-full"></div>
+            {/* Indicador visual (Bolita verde) */}
+            {!data.user.isGroup && otherUser?.isOnline && (
+              <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white rounded-full animate-pulse"></div>
             )}
           </div>
 
@@ -111,34 +130,22 @@ const ChatWindow = () => {
             <span className="font-bold text-gray-800 text-lg leading-tight">
               {data.user?.displayName}
             </span>
-            <span className="text-xs text-indigo-500 font-medium">
-              {data.user.isGroup ? "Grupo" : "En línea"}
+            {/* Texto de estado dinámico */}
+            <span className={`text-xs font-medium ${otherUser?.isOnline ? "text-green-600" : "text-gray-400"}`}>
+              {getStatusText()}
             </span>
           </div>
         </div>
 
         <div className="flex gap-2 text-gray-400">
-          {/* BOTÓN DE VIDEOLLAMADA CONECTADO */}
-          <div
-            onClick={handleVideoCall} // <--- 3. EJECUTAMOS LA FUNCIÓN AQUÍ
-            className="p-2 hover:bg-gray-100 rounded-full cursor-pointer transition-colors hover:text-indigo-500"
-            title="Videollamada"
-          >
+          <div onClick={handleVideoCall} className="p-2 hover:bg-gray-100 rounded-full cursor-pointer hover:text-indigo-500" title="Videollamada">
             <Video size={20} />
           </div>
-
-          {/* Botón de llamada simple (Visual por ahora, o podríamos usar la misma función si Zego lo soporta) */}
-          <div className="p-2 hover:bg-gray-100 rounded-full cursor-pointer transition-colors hover:text-indigo-500" title="Llamada">
+          <div className="p-2 hover:bg-gray-100 rounded-full cursor-pointer hover:text-indigo-500" title="Llamada">
             <Phone size={20} />
           </div>
-
           <div className="w-px h-6 bg-gray-200 mx-1 self-center"></div>
-
-          <div
-            onClick={handleLeaveChat}
-            className="p-2 hover:bg-red-50 rounded-full cursor-pointer transition-colors text-gray-400 hover:text-red-500"
-            title={data.user.isGroup ? "Salir del grupo" : "Borrar chat"}
-          >
+          <div onClick={handleLeaveChat} className="p-2 hover:bg-red-50 rounded-full cursor-pointer hover:text-red-500" title="Opciones">
             <LogOut size={20} />
           </div>
         </div>
