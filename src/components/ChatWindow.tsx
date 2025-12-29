@@ -2,12 +2,14 @@ import { useEffect, useState } from "react";
 import { useChat } from "../context/ChatContext";
 import { useAuth } from "../context/AuthContext";
 import { useNavigate } from "react-router-dom";
-import { MessageCircle, Video, Phone, ArrowLeft, LogOut } from "lucide-react";
+import { Video, Phone, ArrowLeft, LogOut } from "lucide-react";
 import Messages from "./Messages";
 import Input from "./Input";
 import { doc, updateDoc, deleteField, onSnapshot } from "firebase/firestore";
 import { db } from "../config/firebase";
-import { IReply } from "./Message"; // Asegúrate de tener este import
+import { IReply } from "./Message";
+import DiscoverUsers from "./DiscoverUsers";
+import SocialFeed from "./SocialFeed"; // <--- IMPORTANTE: El Muro Social
 
 const ChatWindow = () => {
   const { data, dispatch } = useChat();
@@ -20,10 +22,12 @@ const ChatWindow = () => {
 
   // 1. LÓGICA DE USUARIO EN LÍNEA
   useEffect(() => {
-    if (data.user.isGroup || !data.user.uid) {
+    // Si es grupo, null, o es el Feed, no buscamos estado online
+    if (data.user.isGroup || !data.user.uid || data.user.uid === "feed") {
       setOtherUser(null);
       return;
     }
+    // Escuchamos cambios en el perfil del otro usuario
     const unsub = onSnapshot(doc(db, "users", data.user.uid), (doc) => {
       setOtherUser(doc.data());
     });
@@ -34,7 +38,16 @@ const ChatWindow = () => {
     if (data.user.isGroup) return "Grupo";
     if (!otherUser) return "Desconectado";
     if (otherUser.isOnline) return "En línea";
-    // Cálculo de tiempo (opcional, simplificado aquí)
+
+    // Cálculo de "hace cuánto"
+    if (otherUser.lastSeen) {
+      const lastDate = otherUser.lastSeen.toDate();
+      const now = new Date();
+      const diffInSeconds = Math.floor((now.getTime() - lastDate.getTime()) / 1000);
+      if (diffInSeconds < 60) return "Activo hace un momento";
+      if (diffInSeconds < 3600) return `Hace ${Math.floor(diffInSeconds / 60)} min`;
+      if (diffInSeconds < 86400) return `Hace ${Math.floor(diffInSeconds / 3600)} h`;
+    }
     return "Desconectado";
   };
 
@@ -44,7 +57,7 @@ const ChatWindow = () => {
   };
 
   const handleVideoCall = () => {
-    if (data.chatId && data.chatId !== "null") {
+    if (data.chatId && data.chatId !== "null" && data.chatId !== "feed") {
       navigate(`/room/${data.chatId}`);
     }
   };
@@ -68,27 +81,27 @@ const ChatWindow = () => {
     }
   };
 
-  // PANTALLA DE BIENVENIDA
-  if (data.chatId === "null") {
-    return (
-      <div className="hidden md:flex flex-1 flex-col items-center justify-center relative bg-[#f8fafc] dark:bg-slate-950 transition-colors">
-        <MessageCircle size={64} className="text-gray-300 dark:text-slate-700 mb-4" />
-        <p className="text-gray-500 dark:text-slate-500">Selecciona un chat para comenzar</p>
-      </div>
-    );
+  // --- ESTADO 1: MURO SOCIAL (FEED) ---
+  if (data.user.uid === "feed") {
+    return <SocialFeed />;
   }
 
+  // --- ESTADO 2: PANTALLA DE DESCUBRIMIENTO (Cuando no hay chat) ---
+  if (data.chatId === "null") {
+    return <DiscoverUsers />;
+  }
+
+  // --- ESTADO 3: CHAT ACTIVO ---
   return (
-    <div
-      className="flex-1 flex flex-col h-full relative transition-colors duration-300"
-      style={{}}
-    >
+    <div className="flex-1 flex flex-col h-full relative transition-colors duration-300">
+
       {/* FONDO PATRÓN OSCURO */}
       <div className="absolute inset-0 z-0 bg-[#f3f4f6] dark:bg-slate-950 transition-colors duration-300 pointer-events-none"
         style={{
           backgroundImage: "radial-gradient(rgba(203, 213, 225, 0.4) 1px, transparent 1px)",
           backgroundSize: "20px 20px",
         }}>
+        <div className="absolute inset-0 bg-transparent dark:bg-slate-950/60"></div>
       </div>
 
       {/* HEADER */}
@@ -119,7 +132,7 @@ const ChatWindow = () => {
           </div>
         </div>
 
-        {/* BOTONES DE ACCIÓN (Restaurados) */}
+        {/* BOTONES DE ACCIÓN */}
         <div className="flex gap-2 text-gray-400 dark:text-gray-500">
           <div onClick={handleVideoCall} className="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-full cursor-pointer hover:text-indigo-500 dark:hover:text-indigo-400 transition-colors" title="Videollamada">
             <Video size={20} />
@@ -136,14 +149,14 @@ const ChatWindow = () => {
         </div>
       </div>
 
-      {/* BODY */}
+      {/* BODY DE MENSAJES */}
       <div className="flex-1 overflow-hidden relative z-10">
         <div className="h-full w-full pb-24">
           <Messages setReplyTo={setReplyTo} />
         </div>
       </div>
 
-      {/* FOOTER */}
+      {/* FOOTER INPUT */}
       <Input replyTo={replyTo} setReplyTo={setReplyTo} />
     </div>
   );
